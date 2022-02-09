@@ -1,14 +1,39 @@
 import './App.css';
+import { Previous } from './Buttons/PreviousButton';
+import { Next } from './Buttons/NextPrevious';
+import { HighScores } from './Componenets/HighScore';
 import React, { useState, useEffect } from 'react';
 
 export default function App() {
-  // Get cards with questions
-  const [questions, setQuestions] = useState([]);
-  // total score
-  const [total, setTotal] = useState(0);
+  const today = new Date(); // get date for score
+  const [questions, setQuestions] = useState([]);   // Get cards with questions
+  const [total, setTotal] = useState(0);   // total score
+  const [disabled, setDisabled] = useState(false); // disabled question buttons
+  const [next, setNext] = useState(true); // disabled next button
+  const [previous, setPrevious] = useState(true); // disabled previous button
+  const [index, setIndex] = useState(0); // keep track of question index
+  const [current, setCurrent] = useState(0); // keep track of current question that needs to be answered
+  const [correct, setCorrect] = useState(null); // are you correct?
+  const initalFormData = {
+    username: '',
+    score: total,
+    date: today.toDateString().slice(3, 15)
+  } // This is to keep the user input data
+  const [formData, setFormData] = useState({ ...initalFormData }); // set the formData for input
+  // Handles submit of a username and information
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+    fetch('http://localhost:8000/high_scores', {
+      method: 'POST',
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify(formData)
+    })
+    setFormData({ ...initalFormData });
+    window.location.reload(false);
+  }
 
   /**
-   * gets 10 stack of questions with answers from API
+   * gets a 10 stack of questions with answers from API
    */
      useEffect(() => {
       const getQuestions = async () => {
@@ -17,37 +42,11 @@ export default function App() {
           const result = await response.json(); 
           setQuestions(result.results);
         } catch (error) {
-          console.log(error)
+          console.log(error);
         }
       }
       getQuestions()
     }, []);
-
-  /**
-   * Previous Button
-   * @returns 
-   *  Going to the previous question if possible
-   */
-  const Previous = () => {
-    return(
-      <button className="px-6 h-12 col-span-1 uppercase font-semibold tracking-wider border-2 border-black bg-teal-400 text-black">
-        Previous
-      </button>
-    )
-  }
-
-  /**
-   * next Button
-   * @returns 
-   *  Going to the next button if current question has been answered
-   */
-  const Next = () => {
-    return(
-      <button className="px-6 h-12 col-span-1 uppercase font-semibold tracking-wider border-2 border-black bg-teal-400 text-black">
-        Next
-      </button>
-    )
-  }
 
   /**
    * 
@@ -57,17 +56,22 @@ export default function App() {
    *  A componenet
    */
   const Question = ({ card }) => {
-    const { category, type, difficulty, question, correct_answer, incorrect_answers } = card;
-    // implement an array to be shuffled
-    const choices = [ correct_answer, ...incorrect_answers]
-    let color = ''
-    // change color difficulty
+    const { category, difficulty, question, correct_answer, incorrect_answers } = card;
+    // This is overkill but I wanted it to look nice
+    let questionFixed = question.replace('&quot;', "'").replace('&quot;', "'").replace('&#039;', "`").replace('&#039;', "`");
+    
+    const choices = [ correct_answer, ...incorrect_answers]     // implement an array to be shuffled
+    let color = '';     // change color difficulty
+    let multiplier = 1; // Point multiplier
     if (difficulty === 'easy'){
       color = 'bg-green-400';
+      multiplier = 1;
     } else if (difficulty === 'medium'){
       color = 'bg-orange-500';
+      multiplier = 2;
     } else {
       color = 'bg-red-500';
+      multiplier = 3
     }
 
     /**
@@ -83,37 +87,44 @@ export default function App() {
     _shuffle(choices);
 
     /**
-     * 
-     * @param {value} 
-     *  The value currently selected 
-     */
-    const handleChoice = (value) => {
-      // NEED TO GET THE TARGET VALUE
-      // console.log(value);
-    }
-
-    /**
      * @returns
-     *  all possible answers in buttons
+     *  all possible answers in button form
      */
-    const _scramble = choices.map((choice) => {
-      // implement a way where when clicked we check for the right answer
-      // update the total score
-      // and notify the user
+    const _scramble = choices.map((choice, index) => {
+      let color = disabled ? 'bg-zinc-700' : 'bg-teal-400';
+      // This is overkill but I wanted it to look nice
+      let choiceFixed = choice.replace('&quot;', "'").replace('&quot;', "'").replace('&#039;', "`").replace('&#039;', "`"); 
+
+      
+      const handleChoice = () => {
+        if (choice === correct_answer){
+          setTotal((total) => total + (1 * multiplier))  // update the total score
+          setCorrect('Correct') // Show user they got it Correct
+        }
+        setCorrect('Wrong!')
+        setDisabled(true); // disable all buttons and move onto the next question
+        setNext(false);
+      }
+
       return(
-        <button className="col-span-1 px-6 h-12 uppercase font-semibold tracking-wider border-2 border-black bg-teal-400 text-black" 
+        <button className={`col-span-1 px-6 h-20 w-75 uppercase font-semibold tracking-wider border-2 border-black ${color} hover:bg-teal-700 text-black`} 
+        key={index}
         onClick={handleChoice}
-        >
-          {choice}
+        disabled={disabled}>
+          {choiceFixed}
         </button>
       )
     })
 
+    /**
+     * THIS IS THE FRAME FOR THE QUESTIONS
+     * HOWEVER THE ANSWERS ARE MADE IN _SCRAMBLE
+     */
     return (
       <div className="p-4 grid grid-cols-2 border-2 border-indigo-500">
-        <div className='col-span-1'>Category: {category}</div>
+        <div className='mr-2 col-span-1'>Category: {category}</div>
         <div className={`col-span-1 ${color}`}>Difficulty: {difficulty}</div>
-        <div className='col-span-2'>{question}</div>
+        <div className='col-span-2'>{questionFixed}</div>
           {_scramble}
       </div>
     );
@@ -121,16 +132,13 @@ export default function App() {
   }
   
   /**
-   * THIS IS BEUING USED TO VERIFY ALL THE QUESTIONS APPEAR THE SAME
-   * WILL NOT BE IN FINAL PRODUCT
-   * 
+   * This is the entire deck of questions however only one can be seen
    * @param {deck} 
    *  The whole list of questions 
    * @returns 
-   *  All the questions
+   *  One indexed question
    */
   const Cardlist = ({ deck }) => {
-    const index = 0;
     const list = deck.map((card, index) => <Question key={index} card={card} />)
     return (
       <div className='m-4'>
@@ -147,24 +155,72 @@ export default function App() {
    *  A visual for the total score
    */
   const TotalScore = ({ total }) => {
-    return(
-      <div>
-        {total}
-      </div>
-    );
+    return(<div>Total Score: {total}</div>);
   }
 
-  return (
-    <div className="App">
+  /**
+   * 
+   * @param {answer}
+   *  Either Correct or Wrong 
+   * @returns 
+   *  Null unless state is set
+   */
+  const Answer = ({ answer }) => {
+    return(<div>{answer}</div>);
+  }
+
+  if (current <= 9){
+    return (
+      <div className="App">
+        <header className="App-header">
+          <h1 className='my-10 font-mono font-extrabold'>Trivia Game</h1>
+          <p>Current: {current} | Total Cards: {questions.length}</p>
+          <TotalScore total={total} />
+          <div className="grid-cols-2">
+            <Previous 
+              previous={previous}
+              index={index}
+              setCorrect={setCorrect}
+              setDisabled={setDisabled}
+              setNext={setNext}
+              setIndex={setIndex}
+              setPrevious={setPrevious}
+            />
+            <Next 
+              index={index}
+              next={next}
+              current={current}
+              setIndex={setIndex}
+              setPrevious={setPrevious}
+              setCorrect={setCorrect}
+              setCurrent={setCurrent}
+              setDisabled={setDisabled}
+              setNext={setNext} 
+              formData={formData}
+              total={total} 
+            />
+          </div>
+          <Cardlist deck={questions}/>
+          <Answer answer={correct}/>
+        </header>
+      </div>
+    );
+  } else {
+    return(
+      <div className="App">
       <header className="App-header">
-        <h1 className='my-10 font-mono font-extrabold'>Trivia Game</h1>
-        <TotalScore total={total} />
-        <div className="grid-cols-2">
-          <Previous />
-          <Next />
-        </div>
-        <Cardlist deck={questions}/>
+        <h1 className='my-10 font-mono font-extrabold'>Trivia Game</h1>  
+        {/* High score databse results */}
+        <HighScores 
+          total={total}
+          current={current}
+          formData={formData}
+          setFormData={setFormData}
+          handleSubmit={handleSubmit}
+        />
       </header>
     </div>
-  );
+    )
+  }
+
 }
